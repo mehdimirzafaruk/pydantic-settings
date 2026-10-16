@@ -270,6 +270,27 @@ def test_pyproject_toml_no_file_explicit(tmp_path: Path):
     assert s.model_dump() == {'field': None}
 
 
+def test_pyproject_toml_file_explicit_home_path(cd_tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = cd_tmp_path / 'home'
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv('USERPROFILE', str(home))
+    pyproject = home / 'child' / 'pyproject.toml'
+    pyproject.parent.mkdir(parents=True)
+    pyproject.write_text('[tool.pydantic-settings]\nfield = "from-home"')
+
+    class Settings(BaseSettings):
+        field: str = 'default'
+
+        @classmethod
+        def settings_customise_sources(
+            cls, settings_cls: type[BaseSettings], **_kwargs: PydanticBaseSettingsSource
+        ) -> tuple[PydanticBaseSettingsSource, ...]:
+            return (PyprojectTomlConfigSettingsSource(settings_cls, Path('~/child/pyproject.toml')),)
+
+    s = Settings()
+    assert s.field == 'from-home'
+
+
 @pytest.mark.parametrize('depth', [0, 1, 2])
 def test_pyproject_toml_no_file_too_shallow(depth: int, mocker: MockerFixture, tmp_path: Path):
     cwd = tmp_path / 'child' / 'grandchild' / 'cwd'
